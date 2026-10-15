@@ -13,7 +13,7 @@ LABEL org.opencontainers.image.source="https://github.com/WhiteKiwi/images" \
 COPY images/ubuntu-ci/packages.txt /tmp/image-packages.txt
 RUN apt-get update \
     && xargs -r apt-get install -y --no-install-recommends < /tmp/image-packages.txt \
-    && apt-get purge -y sudo \
+    && SUDO_FORCE_REMOVE=yes apt-get purge -y sudo \
     && rm -rf /var/lib/apt/lists/* /tmp/image-packages.txt \
     && rm -f /usr/bin/docker /usr/bin/dockerd /usr/bin/docker-init /usr/bin/docker-proxy \
              /usr/bin/containerd /usr/bin/containerd-shim-runc-v2 /usr/bin/ctr /usr/bin/runc \
