@@ -39,3 +39,11 @@ Automatic merging is **off unless repository variable `AUTO_MERGE_BASE_UPDATES=t
 Explicit dispatch is required because ordinary events created using `GITHUB_TOKEN` do not start another workflow. If checks, merging or publication fail, the workflow fails visibly and no deployment is performed. A stale update branch must be refreshed and reverified. Automatic publication and actual cluster activation are separate responsibilities.
 
 The repository must permit Actions to create PRs for the scheduled updater. The initial implementation does not add a weekly APT refresh, registry cleanup, or Kubernetes deployment automation.
+
+## Operator controls
+
+The daily updater can also be started with `gh workflow run update-base.yml --repo WhiteKiwi/images`. A manual poll with unchanged upstream digests completes without opening a PR or rebuilding an image.
+
+`AUTO_MERGE_BASE_UPDATES` is a repository Actions variable, initially `false`. Leaving it false still allows update PR creation and verification; the owner then merges the PR. Setting it to `true` enables only the guarded digest-update merge path described above. Verify build/publication and review the merge guard before changing this switch.
+
+README-only PRs still run selector/unit validation and the final `verify` result, while their image build job is skipped. Their merge likewise runs publication planning without publishing another image.
