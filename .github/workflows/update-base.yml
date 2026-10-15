@@ -1,0 +1,27 @@
+name: Check base images
+on:
+  schedule:
+    - cron: '23 21 * * *' # Daily 06:23 Asia/Seoul; GitHub schedules use UTC.
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+concurrency:
+  group: update-base-images
+  cancel-in-progress: false
+jobs:
+  update:
+    if: github.repository == 'WhiteKiwi/images'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: main
+          fetch-depth: 0
+      - run: python3 scripts/check-base-update.py --write
+      - name: Prepare PR and explicitly dispatch verification
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/prepare-base-pr.py

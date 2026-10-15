@@ -1,0 +1,68 @@
+name: Verify images
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      base_sha:
+        description: Exact base commit for selecting changed images; blank checks all
+        required: false
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: verify-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.images.outputs.matrix }}
+      count: ${{ steps.images.outputs.count }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - run: python3 -m unittest discover -s tests -v
+      - id: images
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || inputs.base_sha }}
+        run: |
+          args=()
+          if [[ -n "$BASE_SHA" ]]; then args=(--base "$BASE_SHA" --head "$(git rev-parse HEAD)"); fi
+          matrix=$(python3 scripts/changed-images.py "${args[@]}")
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "count=$(jq '.image | length' <<< "$matrix")" >> "$GITHUB_OUTPUT"
+          echo "$matrix" >> "$GITHUB_STEP_SUMMARY"
+  image:
+    needs: plan
+    if: needs.plan.outputs.count != '0'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - name: Build and smoke test
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: |
+          tag="whitekiwi/$IMAGE:verify-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          bash scripts/build.sh "$IMAGE" "$tag"
+          bash scripts/verify.sh "$IMAGE" "$tag"
+  verify:
+    needs: [plan, image]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - env:
+          PLAN: ${{ needs.plan.result }}
+          IMAGE: ${{ needs.image.result }}
+        run: |
+          [[ "$PLAN" == success ]]
+          [[ "$IMAGE" == success || "$IMAGE" == skipped ]]

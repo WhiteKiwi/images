@@ -1,0 +1,32 @@
+name: Merge verified base update
+on:
+  workflow_run:
+    workflows: [Verify images]
+    types: [completed]
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+concurrency:
+  group: merge-base-images
+  cancel-in-progress: false
+jobs:
+  merge:
+    if: >-
+      vars.AUTO_MERGE_BASE_UPDATES == 'true' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'workflow_dispatch' &&
+      github.event.workflow_run.head_branch == 'automation/base-images' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      # workflow_run uses trusted default-branch code. Never check out the PR here.
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Validate exact tested PR, merge and dispatch publication
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/merge-base-pr.py

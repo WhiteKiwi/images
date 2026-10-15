@@ -1,0 +1,82 @@
+name: Publish images
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact main commit; blank uses current main
+        required: false
+        type: string
+      base_sha:
+        description: Exact previous commit; blank manual runs build all
+        required: false
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: publish-images
+  cancel-in-progress: false
+jobs:
+  plan:
+    if: github.repository == 'WhiteKiwi/images' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.images.outputs.matrix }}
+      count: ${{ steps.images.outputs.count }}
+      source: ${{ steps.images.outputs.source }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: images
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha || github.sha }}
+          BASE_SHA: ${{ inputs.base_sha || github.event.before }}
+        run: |
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          git merge-base --is-ancestor "$SOURCE_SHA" origin/main
+          git checkout --detach "$SOURCE_SHA"
+          python3 -m unittest discover -s tests -v
+          args=()
+          if [[ -n "$BASE_SHA" ]]; then args=(--base "$BASE_SHA" --head "$SOURCE_SHA"); fi
+          matrix=$(python3 scripts/changed-images.py "${args[@]}")
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "count=$(jq '.image | length' <<< "$matrix")" >> "$GITHUB_OUTPUT"
+          echo "source=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+          echo "$matrix" >> "$GITHUB_STEP_SUMMARY"
+  image:
+    needs: plan
+    if: needs.plan.outputs.count != '0'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.plan.outputs.source }}
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - name: Build and verify exact image
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: |
+          tag="ghcr.io/whitekiwi/images/$IMAGE:build-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          bash scripts/build.sh "$IMAGE" "$tag"
+          bash scripts/verify.sh "$IMAGE" "$tag"
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish tested image
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: bash scripts/publish.sh "$IMAGE" "ghcr.io/whitekiwi/images/$IMAGE:build-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
