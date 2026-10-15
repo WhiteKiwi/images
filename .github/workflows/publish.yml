@@ -80,3 +80,7 @@ jobs:
         env:
           IMAGE: ${{ matrix.image }}
         run: bash scripts/publish.sh "$IMAGE" "ghcr.io/whitekiwi/images/$IMAGE:build-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+      - name: Promote current main image to latest
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: bash scripts/promote.sh "$IMAGE"

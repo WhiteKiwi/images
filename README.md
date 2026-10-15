@@ -28,7 +28,7 @@ python3 -m unittest discover -s tests -v
 
 PRs build and smoke-test affected images with read-only permissions. Main pushes and explicit trusted-main dispatches build, verify and publish affected images using the workflow `GITHUB_TOKEN` with `packages: write`. Each image is built once for that publication run; the exact locally tested image is pushed without rebuilding.
 
-Published references use `ghcr.io/whitekiwi/images/<name>:build-<run-id>-<attempt>`. Source commit, pinned upstream reference and final registry digest are recorded in image metadata and the Actions publication summary. Consumers should select an accepted digest. Image publication does not deploy or restart Kubernetes runners. New GHCR packages initially default to Private; the owner must explicitly make the intended image packages Public before anonymous consumers can pull them.
+Published references use `ghcr.io/whitekiwi/images/<name>:build-<run-id>-<attempt>`. Source commit, pinned upstream reference and final registry digest are recorded in image metadata and the Actions publication summary. After publication, the current main build is also tagged `latest`. A build from an older main commit keeps its unique build tag but does not overwrite `latest`. Ephemeral runners may use `latest` with explicit `imagePullPolicy: Always`: each new container resolves the current tag, reusing cached layers. Existing running containers are not restarted by a tag update. Keep unique build tags and digest receipts for manual recovery; dedicated rollback automation and registry cleanup are deferred. New GHCR packages initially default to Private; the owner must explicitly make the intended image packages Public before anonymous consumers can pull them.
 
 ## Base image updates
 
