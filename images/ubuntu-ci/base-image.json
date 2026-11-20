@@ -2,5 +2,5 @@
   "image": "ghcr.io/actions/actions-runner",
   "tracking_tag": "latest",
   "platform": "linux/amd64",
-  "digest": "sha256:660f7b9d1e0007274f7c867e220b3c382137ef5a30d8e501a025ad50dbd5fb9d"
+  "digest": "sha256:4037925f16bd0626196684aff1853dabd242675c82efe08f0a2d376694738d19"
 }
